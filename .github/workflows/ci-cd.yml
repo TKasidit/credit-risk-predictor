@@ -9,21 +9,20 @@ jobs:
   test:                       # CI: check the model before deploying
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements.txt pytest
+      - run: pip install numpy pytest
       - run: pytest -q
 
-   deploy:                     # CD: only runs if the tests passed
+  deploy:                     # CD: only runs if the tests passed
     needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          lfs: true
       - name: Push to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
