@@ -1,0 +1,29 @@
+name: CI/CD - test, then deploy to Hugging Face Space
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:          # also lets you run it manually from the Actions tab
+
+jobs:
+  test:                       # CI: check the model before deploying
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install numpy pytest
+      - run: pytest -q
+
+  deploy:                     # CD: only runs if the tests passed
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: git push --force https://KasiditL:$HF_TOKEN@huggingface.co/spaces/KasiditL/credit-risk-predictor main

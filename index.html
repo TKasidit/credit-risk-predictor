@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Credit Card Default Risk Predictor</title>
+<style>
+  :root { --bg:#ffffff; --card:#f4f6f8; --text:#1b1f24; --muted:#5b6470; --border:#d5dae0; --accent:#2e6db4; --high:#b42318; --low:#1a7f37; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1115; --card:#1a1d23; --text:#e8eaed; --muted:#9aa3ad; --border:#30353d; --accent:#6aa5f0; --high:#f97066; --low:#4ade80; }
+  }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:960px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:24px; margin:0 0 6px; }
+  p.sub { color:var(--muted); margin:0 0 20px; line-height:1.5; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+  label { display:block; font-size:13px; font-weight:600; margin-bottom:4px; }
+  .hint { font-size:12px; color:var(--muted); margin:2px 0 0; }
+  input { width:100%; box-sizing:border-box; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--card); color:var(--text); font-size:14px; }
+  .buttons { display:flex; flex-wrap:wrap; gap:8px; margin:20px 0; }
+  button { padding:9px 14px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:14px; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #result { padding:16px; border-radius:12px; background:var(--card); border:1px solid var(--border); display:none; }
+  #result .big { font-size:28px; font-weight:700; }
+  .high { color:var(--high); } .low { color:var(--low); }
+  footer { margin-top:24px; font-size:12px; color:var(--muted); line-height:1.5; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Credit Card Default Risk Predictor</h1>
+  <p class="sub">Tuned random forest (100 trees, max depth 10, min 5 samples per leaf, balanced class weights) trained on the UCI Default of Credit Card Clients dataset (Yeh, 2009). Enter a customer's details, or load an example. The model runs entirely in your browser.</p>
+  <form id="form" class="grid"></form>
+  <div class="buttons">
+    <button class="primary" id="predict" type="button">Predict</button>
+    <span id="examples"></span>
+    <button id="reset" type="button">Reset to typical values</button>
+  </div>
+  <div id="result"></div>
+  <footer>For coursework demonstration only (AAI6610, Northeastern University), not for real credit decisions. Data: Yeh, I.-C. (2009). Default of Credit Card Clients [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C55S3H</footer>
+</main>
+<script>
+let model, info, examples;
+
+// Same logic as scikit-learn's random forest: follow each tree to a leaf, then average the trees.
+function predictProba(row) {
+  let total = 0;
+  for (const t of model.trees) {
+    let node = 0;
+    while (t.l[node] !== -1) {
+      const x = Math.fround(row[t.f[node]]);          // scikit-learn compares values as 32-bit floats
+      node = x <= Math.fround(t.t[node]) ? t.l[node] : t.r[node];
+    }
+    total += t.p[node];
+  }
+  return total / model.trees.length;
+}
+
+function readForm() { return info.features.map(f => Number(document.getElementById(f).value)); }
+function fillForm(values) { info.features.forEach((f, i) => { document.getElementById(f).value = values[i]; }); }
+
+function showResult() {
+  const row = readForm();
+  if (row.some(v => Number.isNaN(v))) { alert("Please enter a number in every field."); return; }
+  const p = predictProba(row);
+  const high = p >= 0.5;
+  const box = document.getElementById("result");
+  box.style.display = "block";
+  box.innerHTML = `<div class="big ${high ? "high" : "low"}">${(p * 100).toFixed(1)}% probability of default</div>
+    <div>${high ? "High risk: likely to default" : "Low risk: likely to pay"} (decision threshold: 50%)</div>`;
+}
+
+async function init() {
+  [model, info, examples] = await Promise.all(
+    ["model.json", "feature_info.json", "examples.json"].map(f => fetch(f).then(r => r.json())));
+  const form = document.getElementById("form");
+  for (const f of info.features) {
+    form.insertAdjacentHTML("beforeend",
+      `<div><label for="${f}">${f}</label><input id="${f}" type="number" step="any" value="${info.defaults[f]}">
+       <p class="hint">${info.descriptions[f] || ""}</p></div>`);
+  }
+  const ex = document.getElementById("examples");
+  examples.rows.forEach((row, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = `Example: customer ${examples.ids[i]}`;
+    b.onclick = () => { fillForm(row); showResult(); };
+    ex.appendChild(b); ex.append(" ");
+  });
+  document.getElementById("predict").onclick = showResult;
+  document.getElementById("reset").onclick = () => fillForm(info.features.map(f => info.defaults[f]));
+}
+init();
+</script>
+</body>
+</html>
